@@ -142,16 +142,21 @@ class ACB(UTF):
         """ Extracts audio files in an AWB/ACB without preserving filenames. """
         if dirname:
             os.makedirs(dirname, exist_ok=True)
-        filename = 0
-        for i in self.awb.getfiles():
-            Extension: str = self.get_extension(self.payload[0]['WaveformTable'][filename]['EncodeType'][1])
-            if decode and Extension == ".hca":
-                    hca = HCA(i, key=key, subkey=self.awb.subkey).decode()
-                    open(os.path.join(dirname, str(filename)+".wav"), "wb").write(hca)
-                    filename += 1
+        pl = self.payload[0]
+        cue_names_and_indexes = [(entry["CueIndex"], entry["CueName"]) for entry in pl["CueNameTable"]]
+        sorted_cue_names = sorted(cue_names_and_indexes, key=lambda x: x[0])
+        cue_names = [name[1][1] if isinstance(name[1], tuple) else name[1] for name in sorted_cue_names]
+        for idx, file_data in enumerate(self.awb.getfiles()):
+            extension = self.get_extension(pl["WaveformTable"][idx]["EncodeType"][1])
+            if decode and extension == ".hca":
+                hca_data = HCA(file_data, key=key, subkey=self.awb.subkey).decode()
+                out_filename = (cue_names[idx] if idx < len(cue_names) else str(idx)) + ".wav"
+                with open(os.path.join(dirname, out_filename), "wb") as out_file:
+                    out_file.write(hca_data)
             else:
-                open(os.path.join(dirname, f"{filename}{Extension}"), "wb").write(i)
-                filename += 1
+                out_filename = (cue_names[idx] if idx < len(cue_names) else str(idx)) + extension
+                with open(os.path.join(dirname, out_filename), "wb") as out_file:
+                    out_file.write(file_data)
     
     def get_extension(self, EncodeType: int) -> str:
         if EncodeType == 0 or EncodeType == 3:
